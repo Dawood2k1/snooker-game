@@ -21,6 +21,9 @@ let pockets = [];
 let mouseConstraint;
 let boundaries = [];
 
+let isAiming = false;
+let aimStart = null;
+
 function setup() {
   createCanvas(1000, 600);
   engine = Engine.create();
@@ -51,6 +54,9 @@ function setup() {
   World.add(world, mouseConstraint);
 
   detectCollisions();
+
+  canvasElement.addEventListener('mousedown', startAiming);
+  canvasElement.addEventListener('mouseup', endAiming);
 }
 
 function draw() {
@@ -74,6 +80,10 @@ function draw() {
   for (let ball of balls) {
     fill(ball.color);
     ellipse(ball.body.position.x, ball.body.position.y, ballDiameter);
+  }
+
+  if (isAiming) {
+    drawAimLine();
   }
 
   Engine.update(engine);
@@ -166,4 +176,30 @@ function detectCollisions() {
       // For example, check if a ball is in a pocket, etc.
     }
   });
+}
+
+function startAiming(event) {
+  let mousePosition = { x: mouseX, y: mouseY };
+  if (!isAiming) {
+    isAiming = true;
+    aimStart = mousePosition;
+  }
+}
+
+function endAiming(event) {
+  if (isAiming) {
+    let aimEnd = { x: mouseX, y: mouseY };
+    let force = {
+      x: (aimStart.x - aimEnd.x) * 0.001,
+      y: (aimStart.y - aimEnd.y) * 0.001
+    };
+    Body.applyForce(cueBall, cueBall.position, force);
+    isAiming = false;
+  }
+}
+
+function drawAimLine() {
+  stroke(255, 0, 0);
+  strokeWeight(2);
+  line(cueBall.position.x, cueBall.position.y, mouseX, mouseY);
 }
