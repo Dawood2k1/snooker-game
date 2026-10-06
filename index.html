@@ -1,11 +1,170 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Snooker App</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07090b">
+  <title>Snooker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/hud.js"></script>
   <script src="snooker.js"></script>
 </head>
 <body>
+  <div id="app">
+    <header id="hudTop">
+      <div class="scoreboard">
+        <div class="player" id="p0">
+          <span class="turn"></span>
+          <span class="name" id="name0">Player 1</span>
+          <span class="score" id="score0">0</span>
+        </div>
+        <div class="frames" title="Frames won (best of)">
+          <span id="frames0">0</span>
+          <span class="best" id="bestOf">(3)</span>
+          <span id="frames1">0</span>
+        </div>
+        <div class="player right" id="p1">
+          <span class="score" id="score1">0</span>
+          <span class="name" id="name1">Player 2</span>
+          <span class="turn"></span>
+        </div>
+      </div>
+      <div class="statusbar">
+        <div class="stat"><label>Break</label><b id="break">0</b><span class="break-balls" id="breakBalls"></span></div>
+        <div class="stat"><label>On</label><i class="chip red" id="onChip"></i><b id="onText">Red</b></div>
+        <div class="stat"><label>Reds</label><b id="reds">15</b></div>
+        <div class="stat"><label>Remaining</label><b id="remaining">147</b></div>
+      </div>
+    </header>
+
+    <main id="stage">
+      <div id="banner" class="banner">
+        <div class="banner-title" id="bannerTitle"></div>
+        <div class="banner-sub" id="bannerSub"></div>
+      </div>
+    </main>
+
+    <footer id="hudBottom">
+      <div class="spin-control">
+        <div id="spinPad" class="spin-pad" title="Cue tip position: drag to add spin (double-click to centre)">
+          <span class="cross"></span>
+          <span id="spinDot" class="spin-dot"></span>
+        </div>
+        <div class="control-label"><label>Spin</label><b id="spinText">Centre</b></div>
+      </div>
+
+      <div class="power-control">
+        <div class="control-label"><label>Power</label><b id="powerText">0%</b></div>
+        <div id="powerBar" class="power-bar" title="Drag and release to strike">
+          <div id="powerFill" class="power-fill"></div>
+          <div id="powerTicks" class="power-ticks"></div>
+        </div>
+      </div>
+
+      <div class="hint" id="hint"></div>
+
+      <div class="toolbar">
+        <button id="btnGuide" class="tool" title="Aiming guide (G)" aria-label="Toggle aiming guide">
+          <svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="3"/><path d="M8.5 15.5 19 5" stroke-dasharray="2.5 2.5"/><circle cx="19" cy="5" r="1.6"/></svg>
+        </button>
+        <button id="btnSound" class="tool" title="Sound (M)" aria-label="Toggle sound">
+          <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/><path class="mute" d="m16 9 6 6m0-6-6 6"/></svg>
+        </button>
+        <button id="btnHelp" class="tool" title="Controls (H)" aria-label="Show controls">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.7"/><circle cx="12" cy="17" r=".6"/></svg>
+        </button>
+        <button id="btnMenu" class="tool" title="Menu (Esc)" aria-label="Open menu">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="panel menu-panel">
+      <div class="logo">
+        <div class="logo-balls"><i class="ball red"></i><i class="ball pink"></i><i class="ball black"></i></div>
+        <h1>Snooker</h1>
+        <p class="tagline">Championship Edition</p>
+      </div>
+
+      <div class="players">
+        <label class="field"><span>Player 1</span><input id="inName0" maxlength="14" value="Player 1" autocomplete="off" spellcheck="false"></label>
+        <span class="vs">vs</span>
+        <label class="field"><span>Player 2</span><input id="inName1" maxlength="14" value="Player 2" autocomplete="off" spellcheck="false"></label>
+      </div>
+
+      <div class="group">
+        <span class="group-label">Table</span>
+        <div class="seg modes" id="modeSeg">
+          <button data-mode="1" class="on"><b>Standard</b><small>Full 15-red rack</small></button>
+          <button data-mode="2"><b>Scattered reds</b><small>Reds at random</small></button>
+          <button data-mode="3"><b>Free play</b><small>Every ball at random</small></button>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="group-label">Match</span>
+        <div class="seg" id="bestSeg">
+          <button data-best="1">1 frame</button>
+          <button data-best="3" class="on">Best of 3</button>
+          <button data-best="5">Best of 5</button>
+          <button data-best="7">Best of 7</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btnResume" class="btn ghost hidden">Resume</button>
+        <button id="btnStart" class="btn primary">Start Match</button>
+      </div>
+      <p class="menu-foot">Aim with the mouse, drag back and release to strike. Press <kbd>H</kbd> for all controls.</p>
+    </div>
+  </div>
+
+  <div id="help" class="overlay hidden">
+    <div class="panel help-panel">
+      <h2>Controls</h2>
+      <div class="help-grid">
+        <div><kbd>Mouse</kbd></div><div>Aim the cue (hold <kbd>Shift</kbd> for fine aim, or use the wheel)</div>
+        <div><kbd>Drag back</kbd></div><div>Pull the cue back for power, release to strike</div>
+        <div><kbd>Power bar</kbd></div><div>Drag and release to strike (ideal on touch screens)</div>
+        <div><kbd>←</kbd> <kbd>→</kbd></div><div>Nudge the aim (<kbd>Shift</kbd> for bigger steps)</div>
+        <div><kbd>↑</kbd> <kbd>↓</kbd></div><div>Set power, then <kbd>Space</kbd> to strike</div>
+        <div><kbd>Spin pad</kbd></div><div>Where the tip meets the cue ball: top for follow, bottom for screw, sides for side. <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>, <kbd>C</kbd> to centre</div>
+        <div><kbd>Ball in hand</kbd></div><div>Place the cue ball anywhere in the D; click it (or <kbd>R</kbd>) to pick it up again</div>
+        <div><kbd>G</kbd> · <kbd>M</kbd></div><div>Toggle aiming guide · toggle sound</div>
+        <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></div><div>Re-rack: standard · scattered reds · free play</div>
+        <div><kbd>Esc</kbd></div><div>Cancel a shot / open the menu</div>
+      </div>
+      <h3>Rules in brief</h3>
+      <p>Pot a red (1), then any colour: yellow 2, green 3, brown 4, blue 5, pink 6, black 7. Colours return to their spots while reds remain, then are cleared in order. Hitting or potting the wrong ball, or going in-off, gives the opponent at least 4 points.</p>
+      <button id="btnHelpClose" class="btn primary">Got it</button>
+    </div>
+  </div>
+
+  <div id="result" class="overlay hidden">
+    <div class="panel result-panel">
+      <p class="eyebrow" id="resEyebrow">Frame 1</p>
+      <h2 id="resTitle"></h2>
+      <div class="res-score">
+        <div><span class="res-name" id="resN0"></span><span class="res-num" id="resS0">0</span></div>
+        <span class="dash">–</span>
+        <div><span class="res-name" id="resN1"></span><span class="res-num" id="resS1">0</span></div>
+      </div>
+      <p class="res-frames" id="resFrames"></p>
+      <p class="res-break" id="resBreak"></p>
+      <div class="actions"><button id="btnNext" class="btn primary">Next Frame</button></div>
+    </div>
+  </div>
 </body>
 </html>
