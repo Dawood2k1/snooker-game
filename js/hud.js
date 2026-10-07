@@ -8,6 +8,8 @@ const HUD = (() => {
   let lastPower = -1;
   let selectedMode = 1;
   let selectedBest = 3;
+  let selectedOpponent = 2; // 0 = a second human player, 1-3 = computer skill
+  let humanName = 'Player 2';
 
   function init(callbacks) {
     cb = callbacks;
@@ -18,6 +20,11 @@ const HUD = (() => {
       if (!btn) return;
       selectMode(+btn.dataset.mode);
     });
+    $('oppSeg').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-opp]');
+      if (!btn) return;
+      selectOpponent(+btn.dataset.opp);
+    });
     $('bestSeg').addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-best]');
       if (!btn) return;
@@ -25,7 +32,7 @@ const HUD = (() => {
     });
     $('btnStart').addEventListener('click', () => {
       const names = [0, 1].map((i) => $('inName' + i).value.trim() || `Player ${i + 1}`);
-      cb.onStart(names, selectedMode, selectedBest);
+      cb.onStart(names, selectedMode, selectedBest, selectedOpponent);
     });
     $('btnResume').addEventListener('click', () => cb.onResume());
     $('btnNext').addEventListener('click', () => cb.onNext());
@@ -100,15 +107,35 @@ const HUD = (() => {
     for (const b of $('modeSeg').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.mode === m);
   }
 
+  // Against the computer, player 2's name field shows the computer instead
+  function selectOpponent(level) {
+    selectedOpponent = level;
+    for (const b of $('oppSeg').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.opp === level);
+    const input = $('inName1');
+    if (level === 0) {
+      if (input.disabled) input.value = humanName;
+      input.disabled = false;
+    } else {
+      if (!input.disabled) humanName = input.value.trim() || 'Player 2';
+      input.disabled = true;
+      input.value = 'Computer';
+    }
+  }
+
   function selectBest(n) {
     selectedBest = n;
     for (const b of $('bestSeg').querySelectorAll('button')) b.classList.toggle('on', +b.dataset.best === n);
   }
 
-  function setMenuDefaults({ names, mode, bestOf }) {
-    if (names) names.forEach((n, i) => { $('inName' + i).value = n; });
+  function setMenuDefaults({ names, mode, bestOf, ai }) {
+    if (names) {
+      $('inName0').value = names[0];
+      if (names[1] && names[1] !== 'Computer') humanName = names[1];
+    }
+    $('inName1').value = humanName;
     if (mode) selectMode(mode);
     if (bestOf) selectBest(bestOf);
+    selectOpponent(ai === undefined ? 2 : ai);
   }
 
   // ---------------------------------------------------------------- scoreboard

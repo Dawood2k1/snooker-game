@@ -641,3 +641,5 @@ kbd {
     pointer-events: none;
   }
 }
+
+.field input:disabled { color: var(--gold-hi); background: rgba(232, 182, 76, 0.06); cursor: default; }

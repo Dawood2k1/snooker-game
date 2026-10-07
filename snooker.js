@@ -19,6 +19,8 @@ const Game = {
   time: 0,
   resultTimer: 0,
   lastResult: null,
+  // Computer opponent (plays as player 2). level 0 = two human players.
+  ai: { level: 0, phase: null, t: 0, plan: null, fromAngle: 0, fromSpin: null, ghost: null, savedSpin: null },
 };
 
 const STORAGE_KEY = 'snooker.settings.v1';
@@ -42,7 +44,7 @@ function setup() {
     onToggleGuide: toggleGuide,
     onToggleSound: toggleSound,
     onMenu: openMenu,
-    onSpin: setSpin,
+    onSpin: (x, y) => { if (!isAITurn()) setSpin(x, y); },
     onPowerStart: powerBarStart,
     onPowerMove: powerBarMove,
     onPowerEnd: powerBarEnd,
@@ -81,10 +83,12 @@ function windowResized() {
 
 // ---------------------------------------------------------------- match flow
 
-function startMatch(names, mode, bestOf) {
+function startMatch(names, mode, bestOf, aiLevel) {
   SFX.init();
-  saveSettings({ names, mode, bestOf });
+  saveSettings({ names, mode, bestOf, ai: aiLevel });
   Game.mode = mode;
+  Game.ai.level = aiLevel;
+  Game.ai.savedSpin = null;
   Game.matchActive = true;
   Game.paused = false;
   Rules.newMatch(names, bestOf);
@@ -100,6 +104,7 @@ function startFrame() {
   Game.state = 'place';
   Game.shot = null;
   Game.strike = null;
+  resetAI();
   Game.aim.angle = 0;
   Game.aim.dragging = false;
   setPower(0);
@@ -240,7 +245,85 @@ function update(dt) {
     Game.resultTimer -= dt;
     if (Game.resultTimer <= 0) HUD.showResult(Game.lastResult);
   }
+  if (isAITurn() && (Game.state === 'aim' || Game.state === 'place')) updateAI(dt);
   updateHint();
+}
+
+// ---------------------------------------------------------------- computer opponent
+
+function isAITurn() {
+  return Game.ai.level > 0 && Game.matchActive && Rules.state.current === 1 && !Rules.state.frameOver;
+}
+
+function resetAI() {
+  AI.cancel();
+  Object.assign(Game.ai, { phase: null, t: 0, plan: null, ghost: null });
+}
+
+const smooth = (t) => t * t * (3 - 2 * t);
+
+// The computer thinks (spread over frames), then plays its shot the way a
+// player would: place the cue ball, line up, set the spin, draw back, strike.
+function updateAI(dt) {
+  const ai = Game.ai;
+  if (!ai.phase) {
+    if (!ai.savedSpin) ai.savedSpin = { ...Game.spin };
+    AI.begin(ai.level);
+    Object.assign(ai, { phase: 'think', t: 0, plan: null });
+    setPower(0);
+  }
+  ai.t += dt;
+
+  if (ai.phase === 'think') {
+    if (!ai.plan) ai.plan = AI.step(10);
+    if (ai.plan && ai.t >= 0.8) {
+      ai.t = 0;
+      if (ai.plan.place) {
+        ai.phase = 'place';
+        ai.ghost = { x: CFG.BAULK_X - CFG.D_R * 0.35, y: CFG.MID_Y };
+        ai.ghostFrom = { ...ai.ghost };
+      } else {
+        startAIAim();
+      }
+    }
+  } else if (ai.phase === 'place') {
+    const k = smooth(Math.min(1, ai.t / 0.6));
+    ai.ghost = {
+      x: ai.ghostFrom.x + (ai.plan.place.x - ai.ghostFrom.x) * k,
+      y: ai.ghostFrom.y + (ai.plan.place.y - ai.ghostFrom.y) * k,
+    };
+    if (ai.t >= 0.8) {
+      Physics.addBall('cue', ai.plan.place.x, ai.plan.place.y);
+      Game.state = 'aim';
+      ai.ghost = null;
+      SFX.cushion(0.15);
+      startAIAim();
+    }
+  } else if (ai.phase === 'aim') {
+    const k = smooth(Math.min(1, ai.t / 0.9));
+    const turn = Math.atan2(Math.sin(ai.plan.angle - ai.fromAngle), Math.cos(ai.plan.angle - ai.fromAngle));
+    Game.aim.angle = ai.fromAngle + turn * k;
+    setSpin(ai.fromSpin.x + (ai.plan.spinX - ai.fromSpin.x) * k, ai.fromSpin.y + (ai.plan.spinY - ai.fromSpin.y) * k);
+    if (ai.t >= 1.2) {
+      ai.phase = 'power';
+      ai.t = 0;
+    }
+  } else if (ai.phase === 'power') {
+    setPower(ai.plan.power * smooth(Math.min(1, ai.t / 0.5)));
+    if (ai.t >= 0.75) {
+      Game.aim.angle = ai.plan.angle;
+      ai.phase = null;
+      shoot(ai.plan.power);
+    }
+  }
+}
+
+function startAIAim() {
+  const ai = Game.ai;
+  ai.phase = 'aim';
+  ai.t = 0;
+  ai.fromAngle = Game.aim.angle;
+  ai.fromSpin = { ...Game.spin };
 }
 
 function updateStrike(dt) {
@@ -289,6 +372,10 @@ function endShot() {
   const cue = Physics.find('cue');
   if (r.ballInHand && cue) Physics.removeBall(cue);
   Game.ballInHand = r.ballInHand;
+  if (Game.ai.savedSpin && !isAITurn()) {
+    setSpin(Game.ai.savedSpin.x, Game.ai.savedSpin.y);
+    Game.ai.savedSpin = null;
+  }
 
   HUD.update();
 
@@ -378,7 +465,7 @@ function pickUpCueBall() {
 }
 
 function canInteract() {
-  return !Game.paused && !HUD.menuOpen() && !HUD.helpOpen() && Game.state !== 'menu';
+  return !Game.paused && !HUD.menuOpen() && !HUD.helpOpen() && Game.state !== 'menu' && !isAITurn();
 }
 
 function pointerScene(e) {
@@ -553,7 +640,10 @@ function toggleSound() {
 function updateHint() {
   let text = '';
   const touch = Game.pointer.type !== 'mouse';
-  if (Game.state === 'place') {
+  if (isAITurn() && (Game.state === 'aim' || Game.state === 'place')) {
+    const who = Rules.state.players[1];
+    text = Game.ai.phase === 'think' ? `${who} is thinking…` : `${who} is playing`;
+  } else if (Game.state === 'place') {
     text = touch ? 'Ball in hand: drag inside the D and release to place' : 'Ball in hand: click inside the D to place the cue ball';
   } else if (Game.state === 'aim') {
     if (Game.aim.dragging) text = 'Release to strike · right-click or Esc to cancel';
@@ -573,7 +663,7 @@ function sceneData() {
   if (Game.state === 'aim' && cueBall && !Game.paused) {
     const feather = Game.aim.dragging || Game.aim.barCharging || Game.aim.power > 0 ? 0 : (Math.sin(Game.time * 2.2) * 0.5 + 0.5) * 3.5;
     scene.cue = { x: cueBall.body.position.x, y: cueBall.body.position.y, angle: Game.aim.angle, pull: pullFor(Game.aim.power) + 2 + feather, side, alpha: 1 };
-    if (Game.showGuide) {
+    if (Game.showGuide && !(isAITurn() && Game.ai.phase === 'think')) {
       const speed = Math.max(Game.aim.power, 0.45) * CFG.PHYS.MAX_SPEED;
       scene.guide = Physics.predict(cueBall, Game.aim.angle, speed, Game.spin.y, Game.spin.x);
       scene.guideLegal = scene.guide.target ? Rules.isOn(scene.guide.target.kind) : true;
@@ -591,8 +681,13 @@ function sceneData() {
   }
 
   if (Game.state === 'place' && !Game.paused) {
-    const pl = placementFor(Game.pointer);
-    scene.place = { ...pl, show: Game.pointer.over || Game.pointer.type !== 'mouse' };
+    if (isAITurn()) {
+      const g = Game.ai.ghost;
+      scene.place = g ? { x: g.x, y: g.y, valid: true, show: true } : { show: false };
+    } else {
+      const pl = placementFor(Game.pointer);
+      scene.place = { ...pl, show: Game.pointer.over || Game.pointer.type !== 'mouse' };
+    }
   }
   return scene;
 }

@@ -80,15 +80,14 @@ const Rules = (() => {
     return finished;
   }
 
+  // Referee's verdict on a shot without changing any state.
   // shot: { firstHit: kind | null, potted: [kind, ...] }
-  // Returns what happened so the game can update the table and show messages.
-  function judge(shot) {
+  function assess(shot) {
     const on = state.on;
     const first = shot.firstHit;
     const pots = shot.potted.filter((k) => k !== 'cue');
     const cueIn = shot.potted.includes('cue');
     const colourPots = pots.filter(isColour);
-    const redPots = pots.filter((k) => k === 'red');
     const reasons = [];
     let penalty = 4;
 
@@ -119,6 +118,16 @@ const Rules = (() => {
     if (cueIn) reasons.push('Cue ball in-off');
 
     const foul = reasons.length > 0;
+    const points = foul ? 0 : pots.reduce((sum, k) => sum + value(k), 0);
+    return { foul, penalty: foul ? penalty : 0, reasons, points, pots, colourPots, cueIn };
+  }
+
+  // Applies a shot's outcome to the frame and returns what happened so the game
+  // can update the table and show messages.
+  function judge(shot) {
+    const on = state.on;
+    const { foul, penalty, reasons, pots, colourPots, cueIn } = assess(shot);
+    const redPots = pots.filter((k) => k === 'red');
     const shooter = state.current;
     const opponent = 1 - shooter;
     const result = {
@@ -190,7 +199,7 @@ const Rules = (() => {
   }
 
   return {
-    state, newMatch, newFrame, judge, isOn, onLabel, pointsRemaining, isColour, value, name,
+    state, newMatch, newFrame, assess, judge, isOn, onLabel, pointsRemaining, isColour, value, name,
     get on() { return state.on; },
   };
 })();

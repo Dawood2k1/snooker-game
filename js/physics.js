@@ -1,12 +1,15 @@
 // Ball physics. Matter.js integrates motion and resolves the cushions and pocket
 // jaws; ball-to-ball impacts are solved analytically (backtracked to the exact
 // moment of contact) so cut angles match the aiming guide precisely.
+//
+// createPhysics() builds an independent table: the game plays on one, and the
+// computer opponent rehearses candidate shots on its own private copy.
 
-const Physics = (() => {
+function createPhysics({ hz = CFG.PHYS.HZ } = {}) {
   const { Engine, Bodies, Body, Composite, Events, Resolver, Vertices } = Matter;
   const P = CFG.PHYS;
   const R = CFG.R;
-  const STEP = 1 / P.HZ;
+  const STEP = 1 / hz;
 
   let engine;
   let balls = [];
@@ -494,9 +497,20 @@ const Physics = (() => {
     }
   }
 
+  // Run a shot to completion as fast as possible (for the computer's rehearsals)
+  function simulate(maxSeconds) {
+    const maxSteps = Math.ceil(maxSeconds / STEP);
+    for (let i = 0; i < maxSteps; i++) {
+      substep();
+      if (!isMoving()) return;
+    }
+  }
+
   return {
-    init, update, addBall, removeBall, clearBalls, strike, isMoving, isFree, predict, vel,
+    init, update, simulate, addBall, removeBall, clearBalls, strike, isMoving, isFree, predict, castBalls, vel,
     get balls() { return balls; },
     find(kind) { return balls.find((b) => b.kind === kind); },
   };
-})();
+}
+
+const Physics = createPhysics();

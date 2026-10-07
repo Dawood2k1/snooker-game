@@ -15,6 +15,7 @@
   <script src="js/audio.js"></script>
   <script src="js/physics.js"></script>
   <script src="js/rules.js"></script>
+  <script src="js/ai.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/hud.js"></script>
   <script src="snooker.js"></script>
@@ -101,7 +102,17 @@
       <div class="players">
         <label class="field"><span>Player 1</span><input id="inName0" maxlength="14" value="Player 1" autocomplete="off" spellcheck="false"></label>
         <span class="vs">vs</span>
-        <label class="field"><span>Player 2</span><input id="inName1" maxlength="14" value="Player 2" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>Opponent</span><input id="inName1" maxlength="14" value="Player 2" autocomplete="off" spellcheck="false"></label>
+      </div>
+
+      <div class="group">
+        <span class="group-label">Play against</span>
+        <div class="seg modes" id="oppSeg">
+          <button data-opp="1"><b>Amateur</b><small>Computer</small></button>
+          <button data-opp="2" class="on"><b>Pro</b><small>Computer</small></button>
+          <button data-opp="3"><b>Champion</b><small>Computer</small></button>
+          <button data-opp="0"><b>A friend</b><small>Two players</small></button>
+        </div>
       </div>
 
       <div class="group">
